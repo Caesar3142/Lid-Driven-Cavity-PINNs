@@ -165,14 +165,27 @@ def plot_convergence_history(solution, save_path=None):
     ax1.set_title('Total Loss Convergence')
     ax1.grid(True, alpha=0.3)
     
-    # Loss components
-    momentum_x = [comp['momentum_x'] for comp in loss_components]
-    momentum_y = [comp['momentum_y'] for comp in loss_components]
-    continuity = [comp['continuity'] for comp in loss_components]
-    
-    ax2.semilogy(iterations, momentum_x, 'r-', linewidth=2, label='Momentum X')
-    ax2.semilogy(iterations, momentum_y, 'g-', linewidth=2, label='Momentum Y')
-    ax2.semilogy(iterations, continuity, 'b-', linewidth=2, label='Continuity')
+    # Loss components (PINNs uses 'pde_momentum_x', 'pde_momentum_y', 'pde_continuity', 'bc_loss')
+    if loss_components and 'pde_momentum_x' in loss_components[0]:
+        # PINNs format
+        momentum_x = [comp['pde_momentum_x'] for comp in loss_components]
+        momentum_y = [comp['pde_momentum_y'] for comp in loss_components]
+        continuity = [comp['pde_continuity'] for comp in loss_components]
+        bc_loss = [comp['bc_loss'] for comp in loss_components]
+        
+        ax2.semilogy(iterations, momentum_x, 'r-', linewidth=2, label='PDE Momentum X')
+        ax2.semilogy(iterations, momentum_y, 'g-', linewidth=2, label='PDE Momentum Y')
+        ax2.semilogy(iterations, continuity, 'b-', linewidth=2, label='PDE Continuity')
+        ax2.semilogy(iterations, bc_loss, 'm-', linewidth=2, label='Boundary Condition')
+    else:
+        # Legacy format (for backward compatibility)
+        momentum_x = [comp.get('momentum_x', 0) for comp in loss_components]
+        momentum_y = [comp.get('momentum_y', 0) for comp in loss_components]
+        continuity = [comp.get('continuity', 0) for comp in loss_components]
+        
+        ax2.semilogy(iterations, momentum_x, 'r-', linewidth=2, label='Momentum X')
+        ax2.semilogy(iterations, momentum_y, 'g-', linewidth=2, label='Momentum Y')
+        ax2.semilogy(iterations, continuity, 'b-', linewidth=2, label='Continuity')
     ax2.set_xlabel('Iteration')
     ax2.set_ylabel('Loss Component (log scale)')
     ax2.set_title('Loss Components')
