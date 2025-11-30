@@ -1,5 +1,5 @@
 """
-Main script for solving lid-driven cavity flow using Discrete Loss Optimization
+Main script for solving lid-driven cavity flow using Physics-Informed Neural Networks (PINNs)
 """
 
 import numpy as np
@@ -15,30 +15,41 @@ def main():
     total_start_time = time.time()
     
     # Problem parameters
-    nx = 200  # Grid points in x-direction
-    ny = 200  # Grid points in y-direction
     Re = 100  # Reynolds number
+    n_collocation = 2000  # Number of collocation points for PDE loss
+    n_boundary = 100  # Number of boundary points per edge
     
     print("=" * 60)
     print("Lid-Driven Cavity Flow Solver")
-    print("Using Discrete Loss Optimization Framework")
+    print("Using Physics-Informed Neural Networks (PINNs)")
     print("=" * 60)
-    print(f"Grid size: {nx} x {ny}")
     print(f"Reynolds number: Re = {Re}")
+    print(f"Collocation points: {n_collocation}")
+    print(f"Boundary points per edge: {n_boundary}")
     print("-" * 60)
     
     # Create solver
-    solver = LidDrivenCavitySolver(nx=nx, ny=ny, Re=Re, Lx=1.0, Ly=1.0, U_lid=1.0)
+    solver = LidDrivenCavitySolver(
+        Re=Re,
+        Lx=1.0,
+        Ly=1.0,
+        U_lid=1.0,
+        hidden_layers=[50, 50, 50, 50],
+        n_collocation=n_collocation,
+        n_boundary=n_boundary
+    )
     
     # Solve
     print("\nSolving...")
     solve_start_time = time.time()
     solution = solver.solve(
         max_iter=10000,
-        lr=0.01,
+        lr=0.001,
         tol=1e-6,
         verbose=True,
-        log_interval=500
+        log_interval=500,
+        lambda_pde=1.0,
+        lambda_bc=1.0
     )
     solve_elapsed_time = time.time() - solve_start_time
     
@@ -48,9 +59,12 @@ def main():
     print("=" * 60)
     print(f"Iterations: {solution['iterations']}")
     print(f"Final loss: {solution['loss_history'][-1]:.2e}")
-    print(f"Momentum X residual: {solution['loss_components_history'][-1]['momentum_x']:.2e}")
-    print(f"Momentum Y residual: {solution['loss_components_history'][-1]['momentum_y']:.2e}")
-    print(f"Continuity residual: {solution['loss_components_history'][-1]['continuity']:.2e}")
+    if solution['loss_components_history']:
+        last_components = solution['loss_components_history'][-1]
+        print(f"PDE Momentum X residual: {last_components['pde_momentum_x']:.2e}")
+        print(f"PDE Momentum Y residual: {last_components['pde_momentum_y']:.2e}")
+        print(f"PDE Continuity residual: {last_components['pde_continuity']:.2e}")
+        print(f"Boundary condition loss: {last_components['bc_loss']:.2e}")
     print(f"Solving time: {solve_elapsed_time:.2f} seconds ({solve_elapsed_time/60:.2f} minutes)")
     
     # Compute some flow statistics
@@ -68,6 +82,9 @@ def main():
     print("\n" + "=" * 60)
     print("Generating visualizations...")
     print("=" * 60)
+    
+    # Grid resolution for visualization (solution is already on 200x200 grid)
+    nx, ny = 200, 200
     
     viz_start_time = time.time()
     plot_all_results(solution, nx, ny, Lx=1.0, Ly=1.0, save_dir="results")
@@ -89,4 +106,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

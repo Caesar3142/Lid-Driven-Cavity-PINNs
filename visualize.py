@@ -7,8 +7,6 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import csv
 import os
-from solver import LidDrivenCavitySolver
-from discrete_loss import DiscreteLossNS
 
 
 def plot_velocity_field(solution, nx, ny, Lx=1.0, Ly=1.0, save_path=None):

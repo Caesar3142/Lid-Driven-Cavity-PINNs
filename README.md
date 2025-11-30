@@ -1,6 +1,6 @@
-# Lid-Driven Cavity Flow Solver using Discrete Loss Optimization
+# Lid-Driven Cavity Flow Solver using Physics-Informed Neural Networks (PINNs)
 
-This project implements a solver for the lid-driven cavity flow problem using an **Optimizing a Discrete Loss (ODIL)** framework. The approach discretizes the Navier-Stokes equations using finite differences and optimizes the discrete residuals directly.
+This project implements a solver for the lid-driven cavity flow problem using **Physics-Informed Neural Networks (PINNs)**. The approach uses a neural network to represent the solution and enforces the governing PDEs through automatic differentiation.
 
 ## Problem Description
 
@@ -33,24 +33,33 @@ where:
 
 The Reynolds number is defined as: `Re = UL/ν`, where `U` is the lid velocity and `L` is the cavity length.
 
-## Methodology: Discrete Loss Optimization
+## Methodology: Physics-Informed Neural Networks (PINNs)
 
-Instead of using traditional iterative solvers (like SIMPLE or PISO), this framework:
+Instead of using traditional discretization methods (finite differences, finite elements), this framework:
 
-1. **Discretizes** the PDEs using finite differences on a collocated grid
-2. **Computes residuals** at interior grid points for:
-   - X-momentum equation
-   - Y-momentum equation
-   - Continuity equation
-3. **Optimizes** the sum of squared residuals using gradient-based optimization (Adam optimizer)
-4. **Enforces boundary conditions** at each iteration
+1. **Neural Network Representation**: Uses a deep neural network to represent the solution:
+   ```
+   [u(x,y), v(x,y), p(x,y)] = NN(x, y; θ)
+   ```
+   where `θ` are the neural network parameters.
 
-The discrete loss is:
-```
-L = Σ(R_x² + R_y² + R_cont²)
-```
+2. **Automatic Differentiation**: Computes all necessary derivatives (first and second order) using automatic differentiation, eliminating the need for finite difference approximations.
 
-where `R_x`, `R_y`, and `R_cont` are the residuals of the momentum and continuity equations.
+3. **Physics-Informed Loss**: Enforces the PDEs by minimizing the residuals at collocation points:
+   - **PDE Loss**: Sum of squared residuals of momentum and continuity equations at interior collocation points
+   - **Boundary Loss**: Sum of squared residuals enforcing boundary conditions at boundary points
+
+4. **Optimization**: Uses gradient-based optimization (Adam optimizer) to minimize the total loss:
+   ```
+   L_total = λ_pde * L_PDE + λ_bc * L_BC
+   ```
+
+### Key Advantages of PINNs
+
+- **Mesh-free**: No need for structured grids or meshes
+- **Continuous solution**: The neural network provides a continuous representation of the solution
+- **Automatic differentiation**: Exact derivatives without numerical errors
+- **Flexible**: Easy to add physics constraints, data, or other terms to the loss
 
 ## Installation
 
@@ -86,7 +95,7 @@ python main.py
 ```
 
 This will:
-- Solve the lid-driven cavity flow at Re=100
+- Solve the lid-driven cavity flow at Re=100 using PINNs
 - Display convergence progress and timing information
 - Generate visualization plots
 - Export centerline velocity data to CSV files
@@ -100,27 +109,31 @@ from solver import LidDrivenCavitySolver
 
 # Create solver with custom parameters
 solver = LidDrivenCavitySolver(
-    nx=200,      # Grid points in x-direction
-    ny=200,      # Grid points in y-direction
-    Re=100,     # Reynolds number
-    Lx=1.0,     # Domain length in x
-    Ly=1.0,     # Domain length in y
-    U_lid=1.0   # Lid velocity
+    Re=100,                    # Reynolds number
+    Lx=1.0,                    # Domain length in x
+    Ly=1.0,                    # Domain length in y
+    U_lid=1.0,                 # Lid velocity
+    hidden_layers=[50, 50, 50, 50],  # Neural network architecture
+    n_collocation=2000,        # Number of collocation points
+    n_boundary=100             # Number of boundary points per edge
 )
 
 # Solve
 solution = solver.solve(
-    max_iter=10000,  # Maximum iterations
-    lr=0.01,         # Learning rate
-    tol=1e-6,        # Convergence tolerance
-    verbose=True     # Print progress
+    max_iter=10000,            # Maximum iterations
+    lr=0.001,                  # Learning rate
+    tol=1e-6,                  # Convergence tolerance
+    verbose=True,              # Print progress
+    lambda_pde=1.0,           # Weight for PDE loss
+    lambda_bc=1.0             # Weight for boundary condition loss
 )
 
 # Access results
-u = solution['u']  # x-velocity field
-v = solution['v']  # y-velocity field
-p = solution['p']  # pressure field
+u = solution['u']              # x-velocity field (on visualization grid)
+v = solution['v']              # y-velocity field
+p = solution['p']              # pressure field
 loss_history = solution['loss_history']
+model = solution['model']      # Trained neural network model
 ```
 
 ### Visualization
@@ -131,7 +144,7 @@ The package includes visualization utilities:
 from visualize import plot_all_results
 
 # Generate all plots
-plot_all_results(solution, nx, ny, save_dir="results")
+plot_all_results(solution, nx=200, ny=200, save_dir="results")
 ```
 
 Available visualization functions:
@@ -155,26 +168,30 @@ These CSV files are useful for:
 ## Project Structure
 
 ```
-LDC-ODIL/
-├── discrete_loss.py      # Discrete loss framework for Navier-Stokes
-├── boundary_conditions.py # Boundary condition implementation
-├── solver.py             # Main solver class
-├── visualize.py          # Visualization utilities
-├── main.py               # Example usage script
-├── requirements.txt      # Python dependencies
-└── README.md            # This file
+Lid-Driven-Cavity-PINNs/
+├── pinn_model.py            # Neural network architecture
+├── pinn_loss.py             # PINN loss computation using automatic differentiation
+├── boundary_conditions.py    # Boundary condition implementation (loss-based)
+├── solver.py                # Main solver class
+├── visualize.py             # Visualization utilities
+├── main.py                  # Example usage script
+├── requirements.txt         # Python dependencies
+└── README.md               # This file
 ```
 
 ## Key Components
 
-### 1. `DiscreteLossNS` (`discrete_loss.py`)
-Computes discrete residuals for:
-- X-momentum equation using central differences
-- Y-momentum equation using central differences  
-- Continuity equation
+### 1. `PINN` (`pinn_model.py`)
+Neural network model that takes (x, y) coordinates as input and outputs (u, v, p) velocity and pressure fields.
 
-### 2. `LidDrivenCavityBC` (`boundary_conditions.py`)
-Handles boundary conditions with **free-slip** walls:
+### 2. `PINNLossNS` (`pinn_loss.py`)
+Computes PDE residuals using automatic differentiation:
+- X-momentum equation residual
+- Y-momentum equation residual
+- Continuity equation residual
+
+### 3. `LidDrivenCavityBC` (`boundary_conditions.py`)
+Handles boundary conditions through loss terms:
 - Top wall: `u = U_lid`, `v = 0` (moving lid)
 - Bottom wall: `v = 0` (normal), `∂u/∂y = 0` (free-slip)
 - Left wall: `u = 0` (normal), `∂v/∂x = 0` (free-slip)
@@ -184,12 +201,13 @@ Free-slip means:
 - Normal component of velocity = 0 (no flow through wall)
 - Tangential component has zero gradient (no shear stress, fluid can slide along wall)
 
-### 3. `LidDrivenCavitySolver` (`solver.py`)
+### 4. `LidDrivenCavitySolver` (`solver.py`)
 Main solver that:
-- Initializes velocity and pressure fields
-- Optimizes discrete loss using Adam optimizer
-- Enforces boundary conditions at each iteration
+- Initializes the neural network model
+- Samples collocation and boundary points
+- Optimizes the total loss (PDE + BC) using Adam optimizer
 - Monitors convergence
+- Evaluates solution on a grid for visualization
 
 ## Results
 
@@ -203,20 +221,20 @@ The solver generates:
 
 ## Notes
 
-- The pressure field is normalized to have zero reference at the bottom-left corner
-- The solver uses a collocated grid (all variables at same grid points)
-- Boundary conditions are enforced explicitly at each iteration
-- **Free-slip boundary conditions** are used for the stationary walls (bottom, left, right)
-- The top wall maintains a moving lid with specified velocity
+- The neural network uses a fully connected architecture with Tanh activation
+- Collocation points are randomly sampled in the interior domain
+- Boundary points are uniformly sampled along each edge
+- The solution is evaluated on a 200×200 grid for visualization
+- Learning rate scheduling is used to improve convergence
+- Loss weights (`lambda_pde`, `lambda_bc`) can be adjusted to balance PDE and boundary condition enforcement
 - For stability, the learning rate may need adjustment for different Reynolds numbers
-- Timing information is displayed showing solving time, visualization time, and total runtime
+- The neural network architecture (number of layers, layer sizes) can be customized
 
 ## References
 
+- Raissi, M., Perdikaris, P., & Karniadakis, G. E. (2019). Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations. *Journal of Computational Physics*, 378, 686-707.
 - Ghia, U., Ghia, K. N., & Shin, C. T. (1982). High-Re solutions for incompressible flow using the Navier-Stokes equations and a multigrid method. *Journal of computational physics*, 48(3), 387-411.
-- LeVeque, R. J. (2007). *Finite difference methods for ordinary and partial differential equations*. SIAM.
 
 ## License
 
 This code is provided for educational and research purposes.
-
